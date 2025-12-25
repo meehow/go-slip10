@@ -45,14 +45,14 @@ child, _ := master.DerivePath("m/44'/0'/0'/0/0")
 
 Why choose `go-slip10` over other libraries?
 
-| Feature | `go-slip10` | `btcsuite/btcutil` | `anyproto/go-slip10` | Generic Crypto Libs |
-|:---|:---:|:---:|:---:|:---:|
-| **SLIP-10 Support** | ✅ Native | ❌ BIP-32 only | ✅ Ed25519 only | ❌ |
-| **Multi-Curve** | ✅ 4 curves | ❌ Secp256k1 only | ❌ Ed25519 only | ⚠️ Varies |
-| **BIP-39** | ✅ Built-in | ⚠️ Separate pkg | ❌ | ❌ |
-| **Public Derivation** | ✅ Weierstrass | ✅ | ❌ | ❌ |
-| **Dependencies** | 🟢 Minimal | 🔴 Heavy | 🟢 Minimal | 🟢 Minimal |
-| **Type Safety** | 🛡️ Strict | ⚠️ Loose | ⚠️ Loose | ⚠️ Loose |
+| Feature | `go-slip10` | `btcsuite/btcutil` | `anyproto/go-slip10` |
+|:---|:---:|:---:|:---:|
+| **SLIP-10 Support** | ✅ Native | ❌ BIP-32 only | ✅ Ed25519 only |
+| **Multi-Curve** | ✅ 4 curves | ❌ Secp256k1 only | ❌ Ed25519 only |
+| **BIP-39** | ✅ Built-in | ⚠️ Separate pkg | ❌ |
+| **Public Derivation** | ✅ Weierstrass | ✅ | ❌ |
+| **Dependencies** | 🟢 Minimal | 🔴 Heavy | 🟢 Minimal |
+| **Type Safety** | 🛡️ Strict | ⚠️ Loose | ⚠️ Loose |
 
 ## 📦 Installation
 
