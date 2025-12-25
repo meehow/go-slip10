@@ -80,6 +80,47 @@ func NewMasterNode(seed []byte, curve Curve) (*Node, error) {
 	}, nil
 }
 
+func isPrivateVersion(version []byte) bool {
+	return (version[0] == 0x04 && version[1] == 0x88 && version[2] == 0xAD && version[3] == 0xE4) ||
+		(version[0] == 0x04 && version[1] == 0x35 && version[2] == 0x83 && version[3] == 0x94)
+}
+
+func parseKeyData(actualKeyData []byte, isPrivate bool, curve Curve) (privKey, pubKey []byte, err error) {
+	if isPrivate {
+		if actualKeyData[0] != 0 {
+			return nil, nil, errors.New("invalid private key prefix")
+		}
+		privKey = actualKeyData[1:]
+		if len(privKey) != 32 {
+			return nil, nil, errors.New("invalid private key length")
+		}
+		pubKey = curve.PublicKey(privKey)
+	} else {
+		pubKey = actualKeyData
+		if len(pubKey) != 33 {
+			return nil, nil, errors.New("invalid public key length")
+		}
+		if pubKey[0] != 0x02 && pubKey[0] != 0x03 {
+			return nil, nil, errors.New("invalid public key prefix")
+		}
+	}
+	return privKey, pubKey, nil
+}
+
+func validateNodeFields(depth byte, index uint32, parentFP []byte) error {
+	if depth == 0 {
+		if index != 0 {
+			return errors.New("index must be 0 for depth 0")
+		}
+		for _, b := range parentFP {
+			if b != 0 {
+				return errors.New("parent fingerprint must be 0 for depth 0")
+			}
+		}
+	}
+	return nil
+}
+
 // NewNodeFromExtendedKey creates a node from serialized extended key (xpub/xpriv).
 func NewNodeFromExtendedKey(extendedKey string, curve Curve) (*Node, error) {
 	payload, err := base58CheckDecode(extendedKey)
@@ -97,42 +138,14 @@ func NewNodeFromExtendedKey(extendedKey string, curve Curve) (*Node, error) {
 	chainCode := payload[chainCodeOffset:keyOffset]
 	actualKeyData := payload[keyOffset:]
 
-	isPrivate := false
-	if version[0] == 0x04 && version[1] == 0x88 && version[2] == 0xAD && version[3] == 0xE4 ||
-		version[0] == 0x04 && version[1] == 0x35 && version[2] == 0x83 && version[3] == 0x94 {
-		isPrivate = true
+	isPrivate := isPrivateVersion(version)
+	privKey, pubKey, err := parseKeyData(actualKeyData, isPrivate, curve)
+	if err != nil {
+		return nil, err
 	}
 
-	var privKey, pubKey []byte
-	if isPrivate {
-		if actualKeyData[0] != 0 {
-			return nil, errors.New("invalid private key prefix")
-		}
-		privKey = actualKeyData[1:]
-		if len(privKey) != 32 {
-			return nil, errors.New("invalid private key length")
-		}
-		pubKey = curve.PublicKey(privKey)
-	} else {
-		pubKey = actualKeyData
-		if len(pubKey) != 33 {
-			return nil, errors.New("invalid public key length")
-		}
-		if pubKey[0] != 0x02 && pubKey[0] != 0x03 {
-			return nil, errors.New("invalid public key prefix")
-		}
-	}
-
-	// Logical validation from BIP-32/SLIP-10
-	if depth == 0 {
-		if index != 0 {
-			return nil, errors.New("index must be 0 for depth 0")
-		}
-		for _, b := range parentFP {
-			if b != 0 {
-				return nil, errors.New("parent fingerprint must be 0 for depth 0")
-			}
-		}
+	if err := validateNodeFields(depth, index, parentFP); err != nil {
+		return nil, err
 	}
 
 	return &Node{
