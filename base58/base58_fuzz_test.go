@@ -1,11 +1,11 @@
-package slip10
+package base58
 
 import (
 	"bytes"
 	"testing"
 )
 
-// FuzzBase58RoundTrip fuzzes the base58Encode -> base58Decode cycle.
+// FuzzBase58RoundTrip fuzzes the Encode -> Decode cycle.
 func FuzzBase58RoundTrip(f *testing.F) {
 	// Seed corpus
 	f.Add([]byte("Hello World"))
@@ -14,8 +14,8 @@ func FuzzBase58RoundTrip(f *testing.F) {
 	f.Add([]byte{0xff, 0xff, 0xff})
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		encoded := base58Encode(data)
-		decoded := base58Decode(encoded)
+		encoded := Encode(data)
+		decoded := Decode(encoded)
 
 		// Decoded should match original
 		if !bytes.Equal(data, decoded) {
@@ -24,7 +24,7 @@ func FuzzBase58RoundTrip(f *testing.F) {
 	})
 }
 
-// FuzzBase58Decode fuzzes base58Decode with random strings.
+// FuzzBase58Decode fuzzes Decode with random strings.
 func FuzzBase58Decode(f *testing.F) {
 	f.Add("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 	f.Add("")
@@ -33,17 +33,17 @@ func FuzzBase58Decode(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, input string) {
 		// Just ensure it doesn't panic
-		_ = base58Decode(input)
+		_ = Decode(input)
 	})
 }
 
-// FuzzBase58CheckDecode fuzzes base58CheckDecode with random strings.
+// FuzzBase58CheckDecode fuzzes CheckDecode with random strings.
 func FuzzBase58CheckDecode(f *testing.F) {
 	f.Add("3vQB7B6MrGQZaxCuFg4oh")
 	f.Add("")
 
 	f.Fuzz(func(t *testing.T, input string) {
 		// Just ensure it doesn't panic
-		_, _ = base58CheckDecode(input)
+		_, _ = CheckDecode(input)
 	})
 }

@@ -3,6 +3,8 @@ package slip10
 import (
 	"crypto/rand"
 	"testing"
+
+	"github.com/meehow/go-slip10/base58"
 )
 
 func BenchmarkBase58Encode(b *testing.B) {
@@ -10,17 +12,17 @@ func BenchmarkBase58Encode(b *testing.B) {
 	rand.Read(data)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		base58Encode(data)
+		base58.Encode(data)
 	}
 }
 
 func BenchmarkBase58Decode(b *testing.B) {
 	data := make([]byte, 32)
 	rand.Read(data)
-	encoded := base58Encode(data)
+	encoded := base58.Encode(data)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		base58Decode(encoded)
+		base58.Decode(encoded)
 	}
 }
 

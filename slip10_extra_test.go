@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"testing"
+
+	"github.com/meehow/go-slip10/base58"
 )
 
 func TestCurveNames(t *testing.T) {
@@ -135,7 +137,7 @@ func TestNewNodeFromExtendedKeyErrors(t *testing.T) {
 			name: "Invalid Length",
 			// valid checksum but wrong length
 			// base58CheckEncode handles arbitrary length, so we construct a valid check-encoded string of wrong length
-			key:       base58CheckEncode(make([]byte, 10)),
+			key:       base58.CheckEncode(make([]byte, 10)),
 			errString: "invalid extended key length",
 		},
 	}
@@ -155,7 +157,7 @@ func TestNewNodeFromExtendedKeyErrors(t *testing.T) {
 		}
 
 		mod(data)
-		return base58CheckEncode(data)
+		return base58.CheckEncode(data)
 	}
 
 	tests = append(tests,
@@ -225,7 +227,7 @@ func TestTestnetKeys(t *testing.T) {
 
 	xpub := testnetNode.XPub()
 	// tpub prefix in hex is roughly 043587cf
-	decoded, _ := base58CheckDecode(xpub)
+	decoded, _ := base58.CheckDecode(xpub)
 	if hex.EncodeToString(decoded[0:4]) != "043587cf" {
 		t.Errorf("expected tpub version bytes 043587cf, got %x", decoded[0:4])
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/meehow/go-slip10/base58"
 	"golang.org/x/crypto/ripemd160" //lint:ignore SA1019 Required by BIP-32 spec for fingerprinting
 )
 
@@ -123,7 +124,7 @@ func validateNodeFields(depth byte, index uint32, parentFP []byte) error {
 
 // NewNodeFromExtendedKey creates a node from serialized extended key (xpub/xpriv).
 func NewNodeFromExtendedKey(extendedKey string, curve Curve) (*Node, error) {
-	payload, err := base58CheckDecode(extendedKey)
+	payload, err := base58.CheckDecode(extendedKey)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +292,7 @@ func (n *Node) serialize(version []byte, keyData []byte) string {
 	copy(data[chainCodeOffset:], n.ChainCode)
 	copy(data[keyOffset:], keyData)
 
-	return base58CheckEncode(data[:])
+	return base58.CheckEncode(data[:])
 }
 
 // XPriv returns the extended private key (xpriv) string.

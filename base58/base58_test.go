@@ -1,4 +1,4 @@
-package slip10
+package base58
 
 import (
 	"bytes"
@@ -25,39 +25,39 @@ func TestBase58(t *testing.T) {
 
 	for _, test := range tests {
 		data, _ := hex.DecodeString(test.data)
-		got := base58Encode(data)
+		got := Encode(data)
 		if got != test.enc {
-			t.Errorf("base58Encode(%x): got %s, want %s", data, got, test.enc)
+			t.Errorf("Encode(%x): got %s, want %s", data, got, test.enc)
 		}
 
-		decoded := base58Decode(test.enc)
+		decoded := Decode(test.enc)
 		if !bytes.Equal(decoded, data) {
-			t.Errorf("base58Decode(%s): got %x, want %x", test.enc, decoded, data)
+			t.Errorf("Decode(%s): got %x, want %x", test.enc, decoded, data)
 		}
 	}
 }
 
 func TestBase58Check(t *testing.T) {
 	data := []byte("Hello World")
-	encoded := base58CheckEncode(data)
-	decoded, err := base58CheckDecode(encoded)
+	encoded := CheckEncode(data)
+	decoded, err := CheckDecode(encoded)
 	if err != nil {
-		t.Fatalf("base58CheckDecode failed: %v", err)
+		t.Fatalf("CheckDecode failed: %v", err)
 	}
 	if !bytes.Equal(decoded, data) {
-		t.Errorf("base58Check mismatch: got %s, want %s", decoded, data)
+		t.Errorf("Check mismatch: got %s, want %s", decoded, data)
 	}
 
 	// Test invalid checksum
 	// Mutate the last char
 	invalidEncoded := encoded[:len(encoded)-1] + "1"
-	_, err = base58CheckDecode(invalidEncoded)
+	_, err = CheckDecode(invalidEncoded)
 	if err == nil {
 		t.Error("expected error for invalid checksum, got nil")
 	}
 
 	// Test invalid length
-	_, err = base58CheckDecode("123")
+	_, err = CheckDecode("123")
 	if err == nil {
 		t.Error("expected error for short payload, got nil")
 	}
@@ -65,18 +65,18 @@ func TestBase58Check(t *testing.T) {
 
 func TestBase58CheckLargePayload(t *testing.T) {
 	// Create a payload larger than 128 bytes - 4 bytes checksum = 124 bytes
-	// to trigger the make([]byte) path in base58CheckEncode
+	// to trigger the make([]byte) path in CheckEncode
 	payload := make([]byte, 150)
 	for i := range payload {
 		payload[i] = byte(i)
 	}
 
-	encoded := base58CheckEncode(payload)
+	encoded := CheckEncode(payload)
 	if len(encoded) == 0 {
 		t.Error("encoded string is empty")
 	}
 
-	decoded, err := base58CheckDecode(encoded)
+	decoded, err := CheckDecode(encoded)
 	if err != nil {
 		t.Fatalf("failed to decode large payload: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestBase58CheckLargePayload(t *testing.T) {
 
 func TestBase58InvalidInput(t *testing.T) {
 	invalid := "0" // '0' is not in base58 alphabet
-	decoded := base58Decode(invalid)
+	decoded := Decode(invalid)
 	if decoded != nil {
 		t.Errorf("expected nil for invalid character, got %v", decoded)
 	}

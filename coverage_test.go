@@ -6,6 +6,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/meehow/go-slip10/base58"
 )
 
 // mockErrorCurve is a test curve that returns errors to test error paths
@@ -168,7 +170,7 @@ func TestXPrivWithNilVersion(t *testing.T) {
 	}
 
 	// Decode and check version bytes
-	decoded, _ := base58CheckDecode(xpriv)
+	decoded, _ := base58.CheckDecode(xpriv)
 	expectedVersion := []byte{0x04, 0x88, 0xAD, 0xE4}
 	if !bytes.Equal(decoded[:4], expectedVersion) {
 		t.Errorf("expected version %x, got %x", expectedVersion, decoded[:4])
@@ -208,13 +210,13 @@ func TestBase58EncodeLargeBuffer(t *testing.T) {
 		input[i] = 0xFF
 	}
 
-	encoded := base58Encode(input)
+	encoded := base58.Encode(input)
 	if encoded == "" {
 		t.Error("encoded string is empty")
 	}
 
 	// Verify round-trip
-	decoded := base58Decode(encoded)
+	decoded := base58.Decode(encoded)
 	if !bytes.Equal(decoded, input) {
 		t.Error("round-trip failed for large buffer")
 	}
@@ -227,7 +229,7 @@ func TestBase58DecodeLargeBuffer(t *testing.T) {
 	// Each base58 char contributes about 0.73 bytes, so 200+ chars
 	input := strings.Repeat("z", 200) // 'z' is valid base58
 
-	decoded := base58Decode(input)
+	decoded := base58.Decode(input)
 	if decoded == nil {
 		t.Error("decoded is nil for valid input")
 	}
@@ -272,7 +274,7 @@ func TestDerivePathErrorPropagation(t *testing.T) {
 // Test base58 edge case: all zeros input
 func TestBase58AllZeros(t *testing.T) {
 	input := make([]byte, 10)
-	encoded := base58Encode(input)
+	encoded := base58.Encode(input)
 
 	// All zeros should encode to all '1's
 	expected := "1111111111"
@@ -280,7 +282,7 @@ func TestBase58AllZeros(t *testing.T) {
 		t.Errorf("expected %s, got %s", expected, encoded)
 	}
 
-	decoded := base58Decode(encoded)
+	decoded := base58.Decode(encoded)
 	if !bytes.Equal(decoded, input) {
 		t.Errorf("round-trip failed: got %x, want %x", decoded, input)
 	}
@@ -382,8 +384,8 @@ func TestBase58EdgeCases(t *testing.T) {
 	// Test single byte values
 	for i := 0; i < 256; i++ {
 		input := []byte{byte(i)}
-		encoded := base58Encode(input)
-		decoded := base58Decode(encoded)
+		encoded := base58.Encode(input)
+		decoded := base58.Decode(encoded)
 		if !bytes.Equal(decoded, input) {
 			t.Errorf("round-trip failed for byte %d", i)
 		}
@@ -392,8 +394,8 @@ func TestBase58EdgeCases(t *testing.T) {
 	// Test with maximum leading zeros followed by data
 	input := make([]byte, 50)
 	input[49] = 0xFF
-	encoded := base58Encode(input)
-	decoded := base58Decode(encoded)
+	encoded := base58.Encode(input)
+	decoded := base58.Decode(encoded)
 	if !bytes.Equal(decoded, input) {
 		t.Error("round-trip failed for leading zeros test")
 	}
@@ -402,13 +404,13 @@ func TestBase58EdgeCases(t *testing.T) {
 // Test that covers more base58 decode paths
 func TestBase58DecodeEdgeCases(t *testing.T) {
 	// Single character decode
-	decoded := base58Decode("2")
+	decoded := base58.Decode("2")
 	if len(decoded) != 1 || decoded[0] != 1 {
 		t.Errorf("expected [1], got %v", decoded)
 	}
 
 	// Mix of leading 1s and other chars
-	decoded = base58Decode("111z")
+	decoded = base58.Decode("111z")
 	expected := []byte{0, 0, 0, 57}
 	if !bytes.Equal(decoded, expected) {
 		t.Errorf("expected %v, got %v", expected, decoded)

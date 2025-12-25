@@ -1,4 +1,4 @@
-package slip10
+package base58
 
 import (
 	"bytes"
@@ -6,7 +6,7 @@ import (
 	"errors"
 )
 
-const base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 var decodeMap [256]int8
 
@@ -14,13 +14,13 @@ func init() {
 	for i := 0; i < 256; i++ {
 		decodeMap[i] = -1
 	}
-	for i := 0; i < len(base58Alphabet); i++ {
-		decodeMap[base58Alphabet[i]] = int8(i)
+	for i := 0; i < len(alphabet); i++ {
+		decodeMap[alphabet[i]] = int8(i)
 	}
 }
 
-// base58Encode encodes a byte slice into a Base58 string.
-func base58Encode(input []byte) string {
+// Encode encodes a byte slice into a Base58 string.
+func Encode(input []byte) string {
 	if len(input) == 0 {
 		return ""
 	}
@@ -78,14 +78,14 @@ func base58Encode(input []byte) string {
 		res[i] = '1'
 	}
 	for i := 0; i < size-skip; i++ {
-		res[zeros+i] = base58Alphabet[buf[skip+i]]
+		res[zeros+i] = alphabet[buf[skip+i]]
 	}
 
 	return string(res)
 }
 
-// base58Decode decodes a Base58 string into a byte slice.
-func base58Decode(input string) []byte {
+// Decode decodes a Base58 string into a byte slice.
+func Decode(input string) []byte {
 	if len(input) == 0 {
 		return nil
 	}
@@ -144,8 +144,8 @@ func base58Decode(input string) []byte {
 	return res
 }
 
-// base58CheckEncode encodes a byte slice into a Base58Check string.
-func base58CheckEncode(input []byte) string {
+// CheckEncode encodes a byte slice into a Base58Check string.
+func CheckEncode(input []byte) string {
 	h1 := sha256.Sum256(input)
 	h2 := sha256.Sum256(h1[:])
 
@@ -153,18 +153,18 @@ func base58CheckEncode(input []byte) string {
 	if len(input)+4 <= len(buf) {
 		copy(buf[:], input)
 		copy(buf[len(input):], h2[:4])
-		return base58Encode(buf[:len(input)+4])
+		return Encode(buf[:len(input)+4])
 	}
 
 	combined := make([]byte, len(input)+4)
 	copy(combined, input)
 	copy(combined[len(input):], h2[:4])
-	return base58Encode(combined)
+	return Encode(combined)
 }
 
-// base58CheckDecode decodes a Base58Check string into a byte slice.
-func base58CheckDecode(input string) ([]byte, error) {
-	decoded := base58Decode(input)
+// CheckDecode decodes a Base58Check string into a byte slice.
+func CheckDecode(input string) ([]byte, error) {
+	decoded := Decode(input)
 	if len(decoded) < 4 {
 		return nil, errors.New("invalid base58check length")
 	}
