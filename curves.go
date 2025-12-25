@@ -1,0 +1,325 @@
+package slip10
+
+import (
+	"crypto/elliptic"
+	"crypto/hmac"
+	"crypto/sha512"
+	"errors"
+	"math/big"
+
+	"crypto/ed25519"
+
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"golang.org/x/crypto/curve25519"
+)
+
+// Curve represents an elliptic curve supported by SLIP-10.
+type Curve interface {
+	Name() string
+	MasterKey(seed []byte) (privKey, chainCode []byte, err error)
+	DerivePrivateChild(privKey, chainCode []byte, index uint32) (childPrivKey, childChainCode []byte, err error)
+	DerivePublicChild(pubKey, chainCode []byte, index uint32) (childPubKey, childChainCode []byte, err error)
+	PublicKey(privKey []byte) []byte
+}
+
+type baseCurve struct {
+	name     string
+	seedSalt []byte
+}
+
+func (c *baseCurve) Name() string {
+	return c.name
+}
+
+func (c *baseCurve) DerivePublicChild(pubKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	return nil, nil, errors.New("public child derivation not supported for this curve")
+}
+
+// secp256k1 implementation
+type secp256k1Curve struct {
+	baseCurve
+}
+
+func NewSecp256k1() Curve {
+	return &secp256k1Curve{
+		baseCurve: baseCurve{
+			name:     "secp256k1",
+			seedSalt: []byte("Bitcoin seed"),
+		},
+	}
+}
+
+func (c *secp256k1Curve) MasterKey(seed []byte) ([]byte, []byte, error) {
+	return deriveMasterKey(c.seedSalt, seed, secp256k1.S256().N)
+}
+
+func (c *secp256k1Curve) DerivePrivateChild(privKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	return deriveWeierstrassChild(privKey, chainCode, index, secp256k1.S256().N, c.PublicKey)
+}
+
+func (c *secp256k1Curve) DerivePublicChild(pubKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	parser := func(data []byte) (*big.Int, *big.Int, error) {
+		pk, err := secp256k1.ParsePubKey(data)
+		if err != nil {
+			return nil, nil, err
+		}
+		return pk.X(), pk.Y(), nil
+	}
+	return deriveWeierstrassPublicChild(pubKey, chainCode, index, secp256k1.S256(), parser)
+}
+
+func (c *secp256k1Curve) PublicKey(privKey []byte) []byte {
+	priv := secp256k1.PrivKeyFromBytes(privKey)
+	return priv.PubKey().SerializeCompressed()
+}
+
+// NIST P-256 implementation
+type nist256p1Curve struct {
+	baseCurve
+}
+
+func NewNist256p1() Curve {
+	return &nist256p1Curve{
+		baseCurve: baseCurve{
+			name:     "nist256p1",
+			seedSalt: []byte("Nist256p1 seed"),
+		},
+	}
+}
+
+func (c *nist256p1Curve) MasterKey(seed []byte) ([]byte, []byte, error) {
+	return deriveMasterKey(c.seedSalt, seed, elliptic.P256().Params().N)
+}
+
+func (c *nist256p1Curve) DerivePrivateChild(privKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	return deriveWeierstrassChild(privKey, chainCode, index, elliptic.P256().Params().N, c.PublicKey)
+}
+
+func (c *nist256p1Curve) DerivePublicChild(pubKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	parser := func(data []byte) (*big.Int, *big.Int, error) {
+		x, y := elliptic.UnmarshalCompressed(elliptic.P256(), data)
+		if x == nil {
+			return nil, nil, errors.New("invalid public key")
+		}
+		return x, y, nil
+	}
+	return deriveWeierstrassPublicChild(pubKey, chainCode, index, elliptic.P256(), parser)
+}
+
+func (c *nist256p1Curve) PublicKey(privKey []byte) []byte {
+	x, y := elliptic.P256().ScalarBaseMult(privKey)
+	return elliptic.MarshalCompressed(elliptic.P256(), x, y)
+}
+
+func deriveWeierstrassPublicChild(pubKey, chainCode []byte, index uint32, curve elliptic.Curve, parsePubKey func([]byte) (*big.Int, *big.Int, error)) ([]byte, []byte, error) {
+	if index >= 0x80000000 {
+		return nil, nil, errors.New("cannot derive hardened child from public key")
+	}
+
+	var data [37]byte
+	copy(data[:], pubKey)
+	data[33] = byte(index >> 24)
+	data[34] = byte(index >> 16)
+	data[35] = byte(index >> 8)
+	data[36] = byte(index)
+
+	h := hmac.New(sha512.New, chainCode)
+	h.Write(data[:])
+	isum := h.Sum(nil)
+
+	iLBig := new(big.Int)
+
+	// Parse parental public key
+	x, y, err := parsePubKey(pubKey)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for {
+		iL := isum[:32]
+		iR := isum[32:]
+
+		iLBig.SetBytes(iL)
+		if iLBig.Cmp(curve.Params().N) < 0 {
+			// Ki = point(IL) + Kpar
+			ix, iy := curve.ScalarBaseMult(iL)        // point(IL)
+			childX, childY := curve.Add(ix, iy, x, y) // + Kpar
+
+			if childX.Sign() != 0 || childY.Sign() != 0 { // Check if not point at infinity
+				childPubKey := elliptic.MarshalCompressed(curve, childX, childY)
+				return childPubKey, iR, nil
+			}
+		}
+
+		h.Reset()
+		h.Write([]byte{0x01})
+		h.Write(iR)
+		h.Write(data[33:])
+		isum = h.Sum(nil)
+	}
+}
+
+// ed25519 implementation
+type ed25519Curve struct {
+	baseCurve
+}
+
+func NewEd25519() Curve {
+	return &ed25519Curve{
+		baseCurve: baseCurve{
+			name:     "ed25519",
+			seedSalt: []byte("ed25519 seed"),
+		},
+	}
+}
+
+func (c *ed25519Curve) MasterKey(seed []byte) ([]byte, []byte, error) {
+	h := hmac.New(sha512.New, c.seedSalt)
+	h.Write(seed)
+	i := h.Sum(nil)
+	return i[:32], i[32:], nil
+}
+
+func (c *ed25519Curve) DerivePrivateChild(privKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	if index < 0x80000000 {
+		return nil, nil, errors.New("normal derivation not supported for ed25519")
+	}
+
+	var data [37]byte
+	data[0] = 0x00
+	copy(data[1:], privKey)
+	data[33] = byte(index >> 24)
+	data[34] = byte(index >> 16)
+	data[35] = byte(index >> 8)
+	data[36] = byte(index)
+
+	h := hmac.New(sha512.New, chainCode)
+	h.Write(data[:])
+	i := h.Sum(nil)
+	return i[:32], i[32:], nil
+}
+
+func (c *ed25519Curve) PublicKey(privKey []byte) []byte {
+	pub := ed25519.NewKeyFromSeed(privKey).Public().(ed25519.PublicKey)
+	res := make([]byte, 33)
+	res[0] = 0x00
+	copy(res[1:], pub)
+	return res
+}
+
+// curve25519 implementation
+type curve25519Curve struct {
+	baseCurve
+}
+
+func NewCurve25519() Curve {
+	return &curve25519Curve{
+		baseCurve: baseCurve{
+			name:     "curve25519",
+			seedSalt: []byte("curve25519 seed"),
+		},
+	}
+}
+
+func (c *curve25519Curve) MasterKey(seed []byte) ([]byte, []byte, error) {
+	h := hmac.New(sha512.New, c.seedSalt)
+	h.Write(seed)
+	i := h.Sum(nil)
+	return i[:32], i[32:], nil
+}
+
+func (c *curve25519Curve) DerivePrivateChild(privKey, chainCode []byte, index uint32) ([]byte, []byte, error) {
+	if index < 0x80000000 {
+		return nil, nil, errors.New("normal derivation not supported for curve25519")
+	}
+
+	var data [37]byte
+	data[0] = 0x00
+	copy(data[1:], privKey)
+	data[33] = byte(index >> 24)
+	data[34] = byte(index >> 16)
+	data[35] = byte(index >> 8)
+	data[36] = byte(index)
+
+	h := hmac.New(sha512.New, chainCode)
+	h.Write(data[:])
+	i := h.Sum(nil)
+	return i[:32], i[32:], nil
+}
+
+func (c *curve25519Curve) PublicKey(privKey []byte) []byte {
+	pub, err := curve25519.X25519(privKey, curve25519.Basepoint)
+	if err != nil {
+		panic("curve25519: invalid private key: " + err.Error())
+	}
+	res := make([]byte, 33)
+	res[0] = 0x00
+	copy(res[1:], pub)
+	return res
+}
+
+// Helper functions for Weierstrass curves
+
+func deriveMasterKey(salt, seed []byte, n *big.Int) ([]byte, []byte, error) {
+	data := seed
+	iLBig := new(big.Int)
+	for {
+		h := hmac.New(sha512.New, salt)
+		h.Write(data)
+		isum := h.Sum(nil)
+		iL := isum[:32]
+		iR := isum[32:]
+
+		iLBig.SetBytes(iL)
+		if iLBig.Sign() != 0 && iLBig.Cmp(n) < 0 {
+			return iL, iR, nil
+		}
+		data = isum
+	}
+}
+
+func deriveWeierstrassChild(privKey, chainCode []byte, index uint32, n *big.Int, pubKeyFunc func([]byte) []byte) ([]byte, []byte, error) {
+	var data [37]byte
+	if index >= 0x80000000 {
+		data[0] = 0x00
+		copy(data[1:], privKey)
+	} else {
+		pubKey := pubKeyFunc(privKey)
+		copy(data[:], pubKey)
+	}
+	data[33] = byte(index >> 24)
+	data[34] = byte(index >> 16)
+	data[35] = byte(index >> 8)
+	data[36] = byte(index)
+
+	h := hmac.New(sha512.New, chainCode)
+	h.Write(data[:])
+	isum := h.Sum(nil)
+
+	iLBig := new(big.Int)
+	privKeyBig := new(big.Int).SetBytes(privKey)
+
+	for {
+		iL := isum[:32]
+		iR := isum[32:]
+
+		iLBig.SetBytes(iL)
+		if iLBig.Cmp(n) < 0 {
+			iLBig.Add(iLBig, privKeyBig)
+			iLBig.Mod(iLBig, n)
+
+			if iLBig.Sign() != 0 {
+				childPrivKey := make([]byte, 32)
+				b := iLBig.Bytes()
+				copy(childPrivKey[32-len(b):], b) // Pad with leading zeros
+				return childPrivKey, iR, nil
+			}
+		}
+
+		h.Reset()
+		h.Write([]byte{0x01})
+		h.Write(iR)
+		h.Write(data[33:])
+		isum = h.Sum(nil)
+	}
+}
