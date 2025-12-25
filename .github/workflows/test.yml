@@ -10,13 +10,12 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v6
       with:
-        go-version: '1.21'
-        check-latest: true
+        go-version: '1.23'
 
     - name: Vet
       run: go vet ./...
@@ -28,7 +27,6 @@ jobs:
       uses: codecov/codecov-action@v5
       with:
         fail_ci_if_error: false
-        verbose: true
       env:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
